@@ -28,7 +28,7 @@ jobs:
           mkdir -p app/src/main/java/com/example/functioncalculator
           mkdir -p app/src/main/res/layout
 
-          # 3. Создаем парсер математических выражений (MathFunctionParser.java)
+          # 3. Парсер математических выражений (MathFunctionParser.java)
           cat << 'EOF' > app/src/main/java/com/example/functioncalculator/MathFunctionParser.java
           package com.example.functioncalculator;
 
@@ -129,7 +129,133 @@ jobs:
           }
           EOF
 
-          # 4. Создаем MainActivity.java
+          # 4. Графическое отображение функций (GraphView.java)
+          cat << 'EOF' > app/src/main/java/com/example/functioncalculator/GraphView.java
+          package com.example.functioncalculator;
+
+          import android.content.Context;
+          import android.graphics.Canvas;
+          import android.graphics.Color;
+          import android.graphics.Paint;
+          import android.graphics.Path;
+          import android.util.AttributeSet;
+          import android.view.View;
+
+          public class GraphView extends View {
+              private String formula = "(1/4)x^3";
+              private Paint axisPaint;
+              private Paint gridPaint;
+              private Paint linePaint;
+
+              private float minX = -3f;
+              private float maxX = 3f;
+              private float minY = -10f;
+              private float maxY = 10f;
+
+              public GraphView(Context context) {
+                  super(context);
+                  init();
+              }
+
+              public GraphView(Context context, AttributeSet attrs) {
+                  super(context, attrs);
+                  init();
+              }
+
+              private void init() {
+                  axisPaint = new Paint();
+                  axisPaint.setColor(Color.DKGRAY);
+                  axisPaint.setStrokeWidth(4f);
+
+                  gridPaint = new Paint();
+                  gridPaint.setColor(Color.LTGRAY);
+                  gridPaint.setStrokeWidth(1f);
+
+                  linePaint = new Paint();
+                  linePaint.setColor(Color.RED);
+                  linePaint.setStrokeWidth(5f);
+                  linePaint.setStyle(Paint.Style.STROKE);
+                  linePaint.setAntiAlias(true);
+              }
+
+              public void setFormulaAndRange(String formula, float minX, float maxX) {
+                  this.formula = formula;
+                  this.minX = minX;
+                  this.maxX = maxX;
+                  invalidate();
+              }
+
+              @Override
+              protected void onDraw(Canvas canvas) {
+                  super.onDraw(canvas);
+                  int w = getWidth();
+                  int h = getHeight();
+
+                  if (w == 0 || h == 0) return;
+
+                  canvas.drawColor(Color.WHITE);
+
+                  if (maxX <= minX) maxX = minX + 1;
+
+                  float zeroX = w * (-minX) / (maxX - minX);
+                  float zeroY = h * (maxY) / (maxY - minY);
+
+                  // Сетка
+                  float stepX = (maxX - minX) / 10f;
+                  for (int i = 0; i <= 10; i++) {
+                      float currentX = minX + i * stepX;
+                      float gx = w * (currentX - minX) / (maxX - minX);
+                      canvas.drawLine(gx, 0, gx, h, gridPaint);
+                  }
+                  for (int i = -10; i <= 10; i++) {
+                      float gy = h * (maxY - i) / (maxY - minY);
+                      canvas.drawLine(0, gy, w, gy, gridPaint);
+                  }
+
+                  // Оси X и Y
+                  canvas.drawLine(0, zeroY, w, zeroY, axisPaint);
+                  canvas.drawLine(zeroX, 0, zeroX, h, axisPaint);
+
+                  if (formula == null || formula.trim().isEmpty()) return;
+
+                  Path path = new Path();
+                  boolean first = true;
+
+                  for (int px = 0; px < w; px += 2) {
+                      double x = minX + (double) px / w * (maxX - minX);
+                      try {
+                          MathFunctionParser parser = new MathFunctionParser(formula, x);
+                          double y = parser.parse();
+
+                          if (Double.isNaN(y) || Double.isInfinite(y)) {
+                              first = true;
+                              continue;
+                          }
+
+                          float py = (float) (h * (maxY - y) / (maxY - minY));
+
+                          if (py < -h || py > 2 * h) {
+                              first = true;
+                              continue;
+                          }
+
+                          if (first) {
+                              path.moveTo(px, py);
+                              first = false;
+                          } else {
+                              path.lineTo(px, py);
+                          }
+                      } catch (Exception e) {
+                          first = true;
+                      }
+                  }
+
+                  canvas.drawPath(path, linePaint);
+              }
+          }
+          EOF
+
+          # 5. MainActivity.java
           cat << 'EOF' > app/src/main/java/com/example/functioncalculator/MainActivity.java
           package com.example.functioncalculator;
 
@@ -142,8 +268,12 @@ jobs:
 
           public class MainActivity extends AppCompatActivity {
               private EditText inputFormula;
+              private EditText inputStartX;
+              private EditText inputEndX;
+              private EditText inputStep;
               private Button btnCalc;
               private TextView textResult;
+              private GraphView graphView;
 
               @Override
               protected void onCreate(Bundle savedInstanceState) {
@@ -151,8 +281,12 @@ jobs:
                   setContentView(R.layout.activity_main);
 
                   inputFormula = findViewById(R.id.inputFormula);
+                  inputStartX = findViewById(R.id.inputStartX);
+                  inputEndX = findViewById(R.id.inputEndX);
+                  inputStep = findViewById(R.id.inputStep);
                   btnCalc = findViewById(R.id.btnCalc);
                   textResult = findViewById(R.id.textResult);
+                  graphView = findViewById(R.id.graphView);
 
                   btnCalc.setOnClickListener(new View.OnClickListener() {
                       @Override
@@ -169,10 +303,22 @@ jobs:
                       return;
                   }
 
+                  double startX = parseDoubleOrDefault(inputStartX.getText().toString(), -3.0);
+                  double endX = parseDoubleOrDefault(inputEndX.getText().toString(), 3.0);
+                  double step = parseDoubleOrDefault(inputStep.getText().toString(), 0.5);
+
+                  if (startX >= endX) {
+                      textResult.setText("Ошибка: Старт должен быть меньше Конца");
+                      return;
+                  }
+
+                  if (step <= 0) {
+                      step = 0.5;
+                  }
+
+                  graphView.setFormulaAndRange(formula, (float) startX, (float) endX);
+
                   StringBuilder sb = new StringBuilder();
-                  double startX = -3.0;
-                  double endX = 3.0;
-                  double step = 0.5;
 
                   for (double x = startX; x <= endX + 1e-9; x += step) {
                       try {
@@ -185,10 +331,18 @@ jobs:
                   }
                   textResult.setText(sb.toString());
               }
+
+              private double parseDoubleOrDefault(String val, double defaultValue) {
+                  try {
+                      return Double.parseDouble(val.trim());
+                  } catch (Exception e) {
+                      return defaultValue;
+                  }
+              }
           }
           EOF
 
-          # 5. Создаем разметку экрана activity_main.xml
+          # 6. Разметка экрана с полями для диапазона и шага
           cat << 'EOF' > app/src/main/res/layout/activity_main.xml
           <?xml version="1.0" encoding="utf-8"?>
           <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
@@ -211,29 +365,98 @@ jobs:
                   android:hint="(1/4)x^3"
                   android:text="(1/4)x^3" />
 
+              <LinearLayout
+                  android:layout_width="match_parent"
+                  android:layout_height="wrap_content"
+                  android:orientation="horizontal"
+                  android:layout_marginTop="8dp">
+
+                  <LinearLayout
+                      android:layout_width="0dp"
+                      android:layout_height="wrap_content"
+                      android:layout_weight="1"
+                      android:orientation="vertical">
+                      <TextView
+                          android:layout_width="wrap_content"
+                          android:layout_height="wrap_content"
+                          android:text="Старт X"
+                          android:textSize="12sp" />
+                      <EditText
+                          android:id="@+id/inputStartX"
+                          android:layout_width="match_parent"
+                          android:layout_height="wrap_content"
+                          android:inputType="numberSigned|numberDecimal"
+                          android:text="-3" />
+                  </LinearLayout>
+
+                  <LinearLayout
+                      android:layout_width="0dp"
+                      android:layout_height="wrap_content"
+                      android:layout_weight="1"
+                      android:orientation="vertical"
+                      android:layout_marginStart="8dp">
+                      <TextView
+                          android:layout_width="wrap_content"
+                          android:layout_height="wrap_content"
+                          android:text="Конец X"
+                          android:textSize="12sp" />
+                      <EditText
+                          android:id="@+id/inputEndX"
+                          android:layout_width="match_parent"
+                          android:layout_height="wrap_content"
+                          android:inputType="numberSigned|numberDecimal"
+                          android:text="3" />
+                  </LinearLayout>
+
+                  <LinearLayout
+                      android:layout_width="0dp"
+                      android:layout_height="wrap_content"
+                      android:layout_weight="1"
+                      android:orientation="vertical"
+                      android:layout_marginStart="8dp">
+                      <TextView
+                          android:layout_width="wrap_content"
+                          android:layout_height="wrap_content"
+                          android:text="Шаг"
+                          android:textSize="12sp" />
+                      <EditText
+                          android:id="@+id/inputStep"
+                          android:layout_width="match_parent"
+                          android:layout_height="wrap_content"
+                          android:inputType="numberDecimal"
+                          android:text="0.5" />
+                  </LinearLayout>
+              </LinearLayout>
+
               <Button
                   android:id="@+id/btnCalc"
                   android:layout_width="match_parent"
                   android:layout_height="wrap_content"
                   android:layout_marginTop="8dp"
-                  android:text="Рассчитать" />
+                  android:text="Построить график и рассчитать" />
+
+              <com.example.functioncalculator.GraphView
+                  android:id="@+id/graphView"
+                  android:layout_width="match_parent"
+                  android:layout_height="220dp"
+                  android:layout_marginTop="12dp" />
 
               <ScrollView
                   android:layout_width="match_parent"
                   android:layout_height="match_parent"
-                  android:layout_marginTop="16dp">
+                  android:layout_marginTop="12dp">
 
                   <TextView
                       android:id="@+id/textResult"
                       android:layout_width="match_parent"
                       android:layout_height="wrap_content"
-                      android:textSize="16sp"
+                      android:textSize="15sp"
                       android:typeface="monospace" />
               </ScrollView>
           </LinearLayout>
           EOF
 
-          # 6. Создаем settings.gradle
+          # 7. Конфигурация Gradle и Manifest
           cat << 'EOF' > settings.gradle
           pluginManagement {
               repositories {
@@ -253,14 +476,12 @@ jobs:
           include ':app'
           EOF
 
-          # 7. Создаем корневой build.gradle
           cat << 'EOF' > build.gradle
           plugins {
               id 'com.android.application' version '8.2.1' apply false
           }
           EOF
 
-          # 8. Создаем app/build.gradle
           cat << 'EOF' > app/build.gradle
           plugins {
               id 'com.android.application'
@@ -290,7 +511,6 @@ jobs:
           }
           EOF
 
-          # 9. Создаем AndroidManifest.xml
           cat << 'EOF' > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -311,7 +531,6 @@ jobs:
           </manifest>
           EOF
 
-          # 10. Включаем поддержку AndroidX
           cat << 'EOF' > gradle.properties
           android.useAndroidX=true
           android.enableJetifier=true
