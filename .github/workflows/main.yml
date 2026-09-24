@@ -28,7 +28,7 @@ jobs:
           mkdir -p app/src/main/java/com/example/functioncalculator
           mkdir -p app/src/main/res/layout
 
-          # 3. Находим и раскладываем исходные файлы (без учета регистра)
+          # 3. Находим и раскладываем исходные файлы
           find . -iname "MainActivity.java" -exec cp {} app/src/main/java/com/example/functioncalculator/ \;
           find . -iname "MathFunctionParser.java" -exec cp {} app/src/main/java/com/example/functioncalculator/ \;
           find . -iname "activity_main.xml" -exec cp {} app/src/main/res/layout/ \;
@@ -56,7 +56,7 @@ jobs:
           # 5. Создаем корневой build.gradle
           cat << 'EOF' > build.gradle
           plugins {
-              id 'com.android.application' version '8.1.1' apply false
+              id 'com.android.application' version '8.2.1' apply false
           }
           EOF
 
@@ -113,8 +113,10 @@ jobs:
 
           echo "sdk.dir=$ANDROID_HOME" > local.properties
 
-      - name: Setup Gradle Environment
+      - name: Setup Gradle 8.4
         uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.4'
 
       - name: Build APK
         run: gradle assembleDebug
