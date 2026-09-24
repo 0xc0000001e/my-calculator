@@ -21,19 +21,124 @@ jobs:
 
       - name: Setup Android Project Structure
         run: |
-          # 1. Принимаем лицензии Android SDK
+          # 1. Принимаем лицензии
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
 
           # 2. Создаем структуру каталогов
           mkdir -p app/src/main/java/com/example/functioncalculator
           mkdir -p app/src/main/res/layout
 
-          # 3. Находим и раскладываем исходные файлы
-          find . -iname "MainActivity.java" -exec cp {} app/src/main/java/com/example/functioncalculator/ \;
+          # 3. Копируем MathFunctionParser.java из проекта
           find . -iname "MathFunctionParser.java" -exec cp {} app/src/main/java/com/example/functioncalculator/ \;
-          find . -iname "activity_main.xml" -exec cp {} app/src/main/res/layout/ \;
+          
+          # Корректируем package в MathFunctionParser
+          sed -i '1s/^package.*/package com.example.functioncalculator;/' app/src/main/java/com/example/functioncalculator/MathFunctionParser.java || true
 
-          # 4. Создаем settings.gradle
+          # 4. Автоматически создаем MainActivity.java с экраном калькулятора
+          cat << 'EOF' > app/src/main/java/com/example/functioncalculator/MainActivity.java
+          package com.example.functioncalculator;
+
+          import android.os.Bundle;
+          import android.view.View;
+          import android.widget.Button;
+          import android.widget.EditText;
+          import android.widget.TextView;
+          import androidx.appcompat.app.AppCompatActivity;
+
+          public class MainActivity extends AppCompatActivity {
+              private EditText inputFormula;
+              private Button btnCalc;
+              private TextView textResult;
+
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  setContentView(R.layout.activity_main);
+
+                  inputFormula = findViewById(R.id.inputFormula);
+                  btnCalc = findViewById(R.id.btnCalc);
+                  textResult = findViewById(R.id.textResult);
+
+                  btnCalc.setOnClickListener(new View.OnClickListener() {
+                      @Override
+                      public void onClick(View v) {
+                          calculate();
+                      }
+                  });
+              }
+
+              private void calculate() {
+                  String formula = inputFormula.getText().toString().trim();
+                  if (formula.isEmpty()) {
+                      textResult.setText("Введите формулу");
+                      return;
+                  }
+
+                  StringBuilder sb = new StringBuilder();
+                  double startX = -3.0;
+                  double endX = 3.0;
+                  double step = 0.5;
+
+                  for (double x = startX; x <= endX + 1e-9; x += step) {
+                      try {
+                          MathFunctionParser parser = new MathFunctionParser(formula, x);
+                          double y = parser.parse();
+                          sb.append(String.format("x = %.2f   -->   f(x) = %.4f\n", x, y));
+                      } catch (Exception e) {
+                          sb.append(String.format("x = %.2f   -->   Ошибка\n", x));
+                      }
+                  }
+                  textResult.setText(sb.toString());
+              }
+          }
+          EOF
+
+          # 5. Создаем разметку экрана activity_main.xml
+          cat << 'EOF' > app/src/main/res/layout/activity_main.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              android:layout_width="match_parent"
+              android:layout_height="match_parent"
+              android:orientation="vertical"
+              android:padding="16dp">
+
+              <TextView
+                  android:layout_width="wrap_content"
+                  android:layout_height="wrap_content"
+                  android:text="Формула f(x):"
+                  android:textSize="18sp"
+                  android:textStyle="bold" />
+
+              <EditText
+                  android:id="@+id/inputFormula"
+                  android:layout_width="match_parent"
+                  android:layout_height="wrap_content"
+                  android:hint="(1/4)x^3"
+                  android:text="(1/4)x^3" />
+
+              <Button
+                  android:id="@+id/btnCalc"
+                  android:layout_width="match_parent"
+                  android:layout_height="wrap_content"
+                  android:layout_marginTop="8dp"
+                  android:text="Рассчитать" />
+
+              <ScrollView
+                  android:layout_width="match_parent"
+                  android:layout_height="match_parent"
+                  android:layout_marginTop="16dp">
+
+                  <TextView
+                      android:id="@+id/textResult"
+                      android:layout_width="match_parent"
+                      android:layout_height="wrap_content"
+                      android:textSize="16sp"
+                      android:typeface="monospace" />
+              </ScrollView>
+          </LinearLayout>
+          EOF
+
+          # 6. Служебные файлы Gradle и AndroidManifest
           cat << 'EOF' > settings.gradle
           pluginManagement {
               repositories {
@@ -53,14 +158,12 @@ jobs:
           include ':app'
           EOF
 
-          # 5. Создаем корневой build.gradle
           cat << 'EOF' > build.gradle
           plugins {
               id 'com.android.application' version '8.2.1' apply false
           }
           EOF
 
-          # 6. Создаем app/build.gradle
           cat << 'EOF' > app/build.gradle
           plugins {
               id 'com.android.application'
@@ -90,7 +193,6 @@ jobs:
           }
           EOF
 
-          # 7. Создаем AndroidManifest.xml
           cat << 'EOF' > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -111,7 +213,6 @@ jobs:
           </manifest>
           EOF
 
-          # 8. Включаем поддержку AndroidX
           cat << 'EOF' > gradle.properties
           android.useAndroidX=true
           android.enableJetifier=true
