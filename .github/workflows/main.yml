@@ -21,20 +21,18 @@ jobs:
 
       - name: Setup Android Project Structure
         run: |
-          # 1. Принимаем лицензии
+          # 1. Принимаем лицензии Android SDK
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
 
           # 2. Создаем структуру каталогов
           mkdir -p app/src/main/java/com/example/functioncalculator
           mkdir -p app/src/main/res/layout
 
-          # 3. Копируем MathFunctionParser.java из проекта
+          # 3. Копируем MathFunctionParser.java из репозитория и обновляем package
           find . -iname "MathFunctionParser.java" -exec cp {} app/src/main/java/com/example/functioncalculator/ \;
-          
-          # Корректируем package в MathFunctionParser
           sed -i '1s/^package.*/package com.example.functioncalculator;/' app/src/main/java/com/example/functioncalculator/MathFunctionParser.java || true
 
-          # 4. Автоматически создаем MainActivity.java с экраном калькулятора
+          # 4. Создаем MainActivity.java для работы экрана на телефоне
           cat << 'EOF' > app/src/main/java/com/example/functioncalculator/MainActivity.java
           package com.example.functioncalculator;
 
@@ -138,7 +136,7 @@ jobs:
           </LinearLayout>
           EOF
 
-          # 6. Служебные файлы Gradle и AndroidManifest
+          # 6. Создаем settings.gradle
           cat << 'EOF' > settings.gradle
           pluginManagement {
               repositories {
@@ -158,12 +156,14 @@ jobs:
           include ':app'
           EOF
 
+          # 7. Создаем корневой build.gradle
           cat << 'EOF' > build.gradle
           plugins {
               id 'com.android.application' version '8.2.1' apply false
           }
           EOF
 
+          # 8. Создаем app/build.gradle
           cat << 'EOF' > app/build.gradle
           plugins {
               id 'com.android.application'
@@ -193,6 +193,7 @@ jobs:
           }
           EOF
 
+          # 9. Создаем AndroidManifest.xml
           cat << 'EOF' > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -213,6 +214,7 @@ jobs:
           </manifest>
           EOF
 
+          # 10. Включаем поддержку AndroidX
           cat << 'EOF' > gradle.properties
           android.useAndroidX=true
           android.enableJetifier=true
