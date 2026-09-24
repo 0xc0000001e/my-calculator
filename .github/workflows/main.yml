@@ -19,9 +19,6 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
       - name: Build Android APK
         run: |
           # 1. Создаем структуру каталогов
@@ -121,10 +118,9 @@ jobs:
           </manifest>
           EOF
 
-          # 7. Прописываем путь к SDK и инициализируем сборщик Gradle
+          # 7. Используем предустановленный Android SDK и запускаем сборку
           echo "sdk.dir=$ANDROID_HOME" > local.properties
-          gradle wrapper
-          ./gradlew assembleDebug
+          gradle assembleDebug
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
