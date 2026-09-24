@@ -1,4 +1,4 @@
-name: Build Android APK
+name: Build Colku (Android APK & Windows EXE)
 
 on:
   push:
@@ -6,7 +6,10 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  # ==========================================
+  # 1. СБОРКА ДЛЯ ANDROID (Colku.apk)
+  # ==========================================
+  build-android:
     runs-on: ubuntu-latest
 
     steps:
@@ -21,14 +24,12 @@ jobs:
 
       - name: Setup Android Project Structure
         run: |
-          # 1. Принимаем лицензии Android SDK
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
 
-          # 2. Создаем структуру каталогов
           mkdir -p app/src/main/java/com/example/functioncalculator
           mkdir -p app/src/main/res/layout
 
-          # 3. Парсер математических выражений (MathFunctionParser.java)
+          # MathFunctionParser.java
           cat << 'EOF' > app/src/main/java/com/example/functioncalculator/MathFunctionParser.java
           package com.example.functioncalculator;
 
@@ -129,7 +130,7 @@ jobs:
           }
           EOF
 
-          # 4. Компонент отрисовки графика (GraphView.java)
+          # GraphView.java
           cat << 'EOF' > app/src/main/java/com/example/functioncalculator/GraphView.java
           package com.example.functioncalculator;
 
@@ -143,65 +144,33 @@ jobs:
 
           public class GraphView extends View {
               private String formula = "(1/4)x^3";
-              private Paint axisPaint;
-              private Paint gridPaint;
-              private Paint linePaint;
+              private Paint axisPaint, gridPaint, linePaint;
+              private float minX = -3f, maxX = 3f, minY = -10f, maxY = 10f;
 
-              private float minX = -3f;
-              private float maxX = 3f;
-              private float minY = -10f;
-              private float maxY = 10f;
-
-              public GraphView(Context context) {
-                  super(context);
-                  init();
-              }
-
-              public GraphView(Context context, AttributeSet attrs) {
-                  super(context, attrs);
-                  init();
-              }
+              public GraphView(Context context) { super(context); init(); }
+              public GraphView(Context context, AttributeSet attrs) { super(context, attrs); init(); }
 
               private void init() {
-                  axisPaint = new Paint();
-                  axisPaint.setColor(Color.parseColor("#334155"));
-                  axisPaint.setStrokeWidth(4f);
-                  axisPaint.setAntiAlias(true);
-
-                  gridPaint = new Paint();
-                  gridPaint.setColor(Color.parseColor("#E2E8F0"));
-                  gridPaint.setStrokeWidth(2f);
-
-                  linePaint = new Paint();
-                  linePaint.setColor(Color.parseColor("#4F46E5"));
-                  linePaint.setStrokeWidth(6f);
-                  linePaint.setStyle(Paint.Style.STROKE);
-                  linePaint.setAntiAlias(true);
+                  axisPaint = new Paint(); axisPaint.setColor(Color.parseColor("#334155")); axisPaint.setStrokeWidth(4f); axisPaint.setAntiAlias(true);
+                  gridPaint = new Paint(); gridPaint.setColor(Color.parseColor("#E2E8F0")); gridPaint.setStrokeWidth(2f);
+                  linePaint = new Paint(); linePaint.setColor(Color.parseColor("#4F46E5")); linePaint.setStrokeWidth(6f); linePaint.setStyle(Paint.Style.STROKE); linePaint.setAntiAlias(true);
               }
 
               public void setFormulaAndRange(String formula, float minX, float maxX) {
-                  this.formula = formula;
-                  this.minX = minX;
-                  this.maxX = maxX;
-                  invalidate();
+                  this.formula = formula; this.minX = minX; this.maxX = maxX; invalidate();
               }
 
               @Override
               protected void onDraw(Canvas canvas) {
                   super.onDraw(canvas);
-                  int w = getWidth();
-                  int h = getHeight();
-
+                  int w = getWidth(), h = getHeight();
                   if (w == 0 || h == 0) return;
-
                   canvas.drawColor(Color.WHITE);
-
                   if (maxX <= minX) maxX = minX + 1;
 
                   float zeroX = w * (-minX) / (maxX - minX);
                   float zeroY = h * (maxY) / (maxY - minY);
 
-                  // Сетка
                   float stepX = (maxX - minX) / 10f;
                   for (int i = 0; i <= 10; i++) {
                       float currentX = minX + i * stepX;
@@ -213,12 +182,10 @@ jobs:
                       canvas.drawLine(0, gy, w, gy, gridPaint);
                   }
 
-                  // Оси X и Y
                   canvas.drawLine(0, zeroY, w, zeroY, axisPaint);
                   canvas.drawLine(zeroX, 0, zeroX, h, axisPaint);
 
                   if (formula == null || formula.trim().isEmpty()) return;
-
                   Path path = new Path();
                   boolean first = true;
 
@@ -227,36 +194,18 @@ jobs:
                       try {
                           MathFunctionParser parser = new MathFunctionParser(formula, x);
                           double y = parser.parse();
-
-                          if (Double.isNaN(y) || Double.isInfinite(y)) {
-                              first = true;
-                              continue;
-                          }
-
+                          if (Double.isNaN(y) || Double.isInfinite(y)) { first = true; continue; }
                           float py = (float) (h * (maxY - y) / (maxY - minY));
-
-                          if (py < -h || py > 2 * h) {
-                              first = true;
-                              continue;
-                          }
-
-                          if (first) {
-                              path.moveTo(px, py);
-                              first = false;
-                          } else {
-                              path.lineTo(px, py);
-                          }
-                      } catch (Exception e) {
-                          first = true;
-                      }
+                          if (py < -h || py > 2 * h) { first = true; continue; }
+                          if (first) { path.moveTo(px, py); first = false; } else { path.lineTo(px, py); }
+                      } catch (Exception e) { first = true; }
                   }
-
                   canvas.drawPath(path, linePaint);
               }
           }
           EOF
 
-          # 5. MainActivity.java с поддержкой своей виртуальной клавиатуры
+          # MainActivity.java
           cat << 'EOF' > app/src/main/java/com/example/functioncalculator/MainActivity.java
           package com.example.functioncalculator;
 
@@ -268,14 +217,10 @@ jobs:
           import androidx.appcompat.app.AppCompatActivity;
 
           public class MainActivity extends AppCompatActivity {
-              private EditText inputFormula;
-              private EditText inputStartX;
-              private EditText inputEndX;
-              private EditText inputStep;
+              private EditText inputFormula, inputStartX, inputEndX, inputStep;
               private Button btnCalc;
               private TextView textResult;
               private GraphView graphView;
-
               private EditText activeInput;
 
               @Override
@@ -291,7 +236,6 @@ jobs:
                   textResult = findViewById(R.id.textResult);
                   graphView = findViewById(R.id.graphView);
 
-                  // Отключаем системную клавиатуру для всех полей ввода
                   disableSoftKeyboard(inputFormula);
                   disableSoftKeyboard(inputStartX);
                   disableSoftKeyboard(inputEndX);
@@ -299,13 +243,8 @@ jobs:
 
                   activeInput = inputFormula;
 
-                  View.OnFocusChangeListener focusListener = new View.OnFocusChangeListener() {
-                      @Override
-                      public void onFocusChange(View v, boolean hasFocus) {
-                          if (hasFocus && v instanceof EditText) {
-                              activeInput = (EditText) v;
-                          }
-                      }
+                  View.OnFocusChangeListener focusListener = (v, hasFocus) -> {
+                      if (hasFocus && v instanceof EditText) activeInput = (EditText) v;
                   };
 
                   inputFormula.setOnFocusChangeListener(focusListener);
@@ -314,13 +253,7 @@ jobs:
                   inputStep.setOnFocusChangeListener(focusListener);
 
                   setupKeypad();
-
-                  btnCalc.setOnClickListener(new View.OnClickListener() {
-                      @Override
-                      public void onClick(View v) {
-                          calculate();
-                      }
-                  });
+                  btnCalc.setOnClickListener(v -> calculate());
               }
 
               private void disableSoftKeyboard(EditText editText) {
@@ -336,94 +269,54 @@ jobs:
                       R.id.btnX, R.id.btnSin, R.id.btnCos, R.id.btnSqrt, R.id.btnFraction
                   };
 
-                  View.OnClickListener keyListener = new View.OnClickListener() {
-                      @Override
-                      public void onClick(View v) {
-                          Button b = (Button) v;
-                          String text = b.getText().toString();
-                          if (text.equals("a/b")) {
-                              insertText("(/)");
-                          } else if (text.equals("√")) {
-                              insertText("sqrt(");
-                          } else if (text.equals("sin") || text.equals("cos")) {
-                              insertText(text + "(");
-                          } else {
-                              insertText(text);
-                          }
-                      }
+                  View.OnClickListener keyListener = v -> {
+                      Button b = (Button) v;
+                      String text = b.getText().toString();
+                      if (text.equals("a/b")) insertText("(/)");
+                      else if (text.equals("√")) insertText("sqrt(");
+                      else if (text.equals("sin") || text.equals("cos")) insertText(text + "(");
+                      else insertText(text);
                   };
 
                   for (int id : keyIds) {
                       View v = findViewById(id);
-                      if (v != null) {
-                          v.setOnClickListener(keyListener);
-                      }
+                      if (v != null) v.setOnClickListener(keyListener);
                   }
 
                   View btnBackspace = findViewById(R.id.btnBackspace);
-                  if (btnBackspace != null) {
-                      btnBackspace.setOnClickListener(new View.OnClickListener() {
-                          @Override
-                          public void onClick(View v) {
-                              deleteChar();
-                          }
-                      });
-                  }
+                  if (btnBackspace != null) btnBackspace.setOnClickListener(v -> deleteChar());
 
                   View btnClear = findViewById(R.id.btnClear);
-                  if (btnClear != null) {
-                      btnClear.setOnClickListener(new View.OnClickListener() {
-                          @Override
-                          public void onClick(View v) {
-                              if (activeInput != null) {
-                                  activeInput.setText("");
-                              }
-                          }
-                      });
-                  }
+                  if (btnClear != null) btnClear.setOnClickListener(v -> { if (activeInput != null) activeInput.setText(""); });
               }
 
               private void insertText(String text) {
                   if (activeInput == null) return;
                   int start = Math.max(activeInput.getSelectionStart(), 0);
                   int end = Math.max(activeInput.getSelectionEnd(), 0);
-                  activeInput.getText().replace(Math.min(start, end), Math.max(start, end),
-                          text, 0, text.length());
+                  activeInput.getText().replace(Math.min(start, end), Math.max(start, end), text, 0, text.length());
               }
 
               private void deleteChar() {
                   if (activeInput == null) return;
                   int start = activeInput.getSelectionStart();
                   int end = activeInput.getSelectionEnd();
-                  if (start != end) {
-                      activeInput.getText().delete(start, end);
-                  } else if (start > 0) {
-                      activeInput.getText().delete(start - 1, start);
-                  }
+                  if (start != end) activeInput.getText().delete(start, end);
+                  else if (start > 0) activeInput.getText().delete(start - 1, start);
               }
 
               private void calculate() {
                   String formula = inputFormula.getText().toString().trim();
-                  if (formula.isEmpty()) {
-                      textResult.setText("Введите формулу");
-                      return;
-                  }
+                  if (formula.isEmpty()) { textResult.setText("Введите формулу"); return; }
 
                   double startX = parseDoubleOrDefault(inputStartX.getText().toString(), -3.0);
                   double endX = parseDoubleOrDefault(inputEndX.getText().toString(), 3.0);
                   double step = parseDoubleOrDefault(inputStep.getText().toString(), 0.5);
 
-                  if (startX >= endX) {
-                      textResult.setText("Ошибка: Старт должен быть меньше Конца");
-                      return;
-                  }
-
-                  if (step <= 0) {
-                      step = 0.5;
-                  }
+                  if (startX >= endX) { textResult.setText("Ошибка: Старт должен быть меньше Конца"); return; }
+                  if (step <= 0) step = 0.5;
 
                   graphView.setFormulaAndRange(formula, (float) startX, (float) endX);
-
                   StringBuilder sb = new StringBuilder();
 
                   for (double x = startX; x <= endX + 1e-9; x += step) {
@@ -439,160 +332,45 @@ jobs:
               }
 
               private double parseDoubleOrDefault(String val, double defaultValue) {
-                  try {
-                      return Double.parseDouble(val.trim());
-                  } catch (Exception e) {
-                      return defaultValue;
-                  }
+                  try { return Double.parseDouble(val.trim()); } catch (Exception e) { return defaultValue; }
               }
           }
           EOF
 
-          # 6. Разметка экрана с кнопками клавиатуры (activity_main.xml)
+          # activity_main.xml
           cat << 'EOF' > app/src/main/res/layout/activity_main.xml
           <?xml version="1.0" encoding="utf-8"?>
           <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
               xmlns:app="http://schemas.android.com/apk/res-auto"
-              android:layout_width="match_parent"
-              android:layout_height="match_parent"
-              android:background="#F8FAFC"
-              android:fillViewport="true">
-
-              <LinearLayout
-                  android:layout_width="match_parent"
-                  android:layout_height="wrap_content"
-                  android:orientation="vertical"
-                  android:padding="12dp">
-
-                  <TextView
-                      android:layout_width="wrap_content"
-                      android:layout_height="wrap_content"
-                      android:text="Colku"
-                      android:textColor="#1E293B"
-                      android:textSize="24sp"
-                      android:textStyle="bold"
-                      android:layout_marginBottom="8dp" />
-
-                  <!-- Поля ввода -->
-                  <androidx.cardview.widget.CardView
-                      android:layout_width="match_parent"
-                      android:layout_height="wrap_content"
-                      android:layout_marginBottom="10dp"
-                      app:cardCornerRadius="12dp"
-                      app:cardElevation="2dp"
-                      app:cardBackgroundColor="#FFFFFF">
-
-                      <LinearLayout
-                          android:layout_width="match_parent"
-                          android:layout_height="wrap_content"
-                          android:orientation="vertical"
-                          android:padding="12dp">
-
-                          <TextView
-                              android:layout_width="wrap_content"
-                              android:layout_height="wrap_content"
-                              android:text="Формула f(x)"
-                              android:textColor="#64748B"
-                              android:textSize="12sp"
-                              android:textStyle="bold" />
-
-                          <EditText
-                              android:id="@+id/inputFormula"
-                              android:layout_width="match_parent"
-                              android:layout_height="wrap_content"
-                              android:hint="(1/4)x^3"
-                              android:text="(1/4)x^3"
-                              android:textColor="#0F172A"
-                              android:textSize="16sp" />
-
-                          <LinearLayout
-                              android:layout_width="match_parent"
-                              android:layout_height="wrap_content"
-                              android:orientation="horizontal"
-                              android:layout_marginTop="8dp">
-
-                              <LinearLayout
-                                  android:layout_width="0dp"
-                                  android:layout_height="wrap_content"
-                                  android:layout_weight="1"
-                                  android:orientation="vertical">
-                                  <TextView
-                                      android:layout_width="wrap_content"
-                                      android:layout_height="wrap_content"
-                                      android:text="Старт X"
-                                      android:textColor="#64748B"
-                                      android:textSize="11sp" />
-                                  <EditText
-                                      android:id="@+id/inputStartX"
-                                      android:layout_width="match_parent"
-                                      android:layout_height="wrap_content"
-                                      android:text="-3"
-                                      android:textColor="#0F172A" />
+              android:layout_width="match_parent" android:layout_height="match_parent"
+              android:background="#F8FAFC" android:fillViewport="true">
+              <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="12dp">
+                  <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Colku" android:textColor="#1E293B" android:textSize="24sp" android:textStyle="bold" android:layout_marginBottom="8dp" />
+                  
+                  <androidx.cardview.widget.CardView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="10dp" app:cardCornerRadius="12dp" app:cardElevation="2dp" app:cardBackgroundColor="#FFFFFF">
+                      <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="12dp">
+                          <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Формула f(x)" android:textColor="#64748B" android:textSize="12sp" android:textStyle="bold" />
+                          <EditText android:id="@+id/inputFormula" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="(1/4)x^3" android:text="(1/4)x^3" android:textColor="#0F172A" android:textSize="16sp" />
+                          <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="8dp">
+                              <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical">
+                                  <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Старт X" android:textColor="#64748B" android:textSize="11sp" />
+                                  <EditText android:id="@+id/inputStartX" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="-3" android:textColor="#0F172A" />
                               </LinearLayout>
-
-                              <LinearLayout
-                                  android:layout_width="0dp"
-                                  android:layout_height="wrap_content"
-                                  android:layout_weight="1"
-                                  android:orientation="vertical"
-                                  android:layout_marginStart="6dp">
-                                  <TextView
-                                      android:layout_width="wrap_content"
-                                      android:layout_height="wrap_content"
-                                      android:text="Конец X"
-                                      android:textColor="#64748B"
-                                      android:textSize="11sp" />
-                                  <EditText
-                                      android:id="@+id/inputEndX"
-                                      android:layout_width="match_parent"
-                                      android:layout_height="wrap_content"
-                                      android:text="3"
-                                      android:textColor="#0F172A" />
+                              <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:layout_marginStart="6dp">
+                                  <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Конец X" android:textColor="#64748B" android:textSize="11sp" />
+                                  <EditText android:id="@+id/inputEndX" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="3" android:textColor="#0F172A" />
                               </LinearLayout>
-
-                              <LinearLayout
-                                  android:layout_width="0dp"
-                                  android:layout_height="wrap_content"
-                                  android:layout_weight="1"
-                                  android:orientation="vertical"
-                                  android:layout_marginStart="6dp">
-                                  <TextView
-                                      android:layout_width="wrap_content"
-                                      android:layout_height="wrap_content"
-                                      android:text="Шаг"
-                                      android:textColor="#64748B"
-                                      android:textSize="11sp" />
-                                  <EditText
-                                      android:id="@+id/inputStep"
-                                      android:layout_width="match_parent"
-                                      android:layout_height="wrap_content"
-                                      android:text="0.5"
-                                      android:textColor="#0F172A" />
+                              <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:layout_marginStart="6dp">
+                                  <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Шаг" android:textColor="#64748B" android:textSize="11sp" />
+                                  <EditText android:id="@+id/inputStep" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="0.5" android:textColor="#0F172A" />
                               </LinearLayout>
                           </LinearLayout>
                       </LinearLayout>
                   </androidx.cardview.widget.CardView>
 
-                  <!-- Встроенная клавиатура -->
-                  <androidx.cardview.widget.CardView
-                      android:layout_width="match_parent"
-                      android:layout_height="wrap_content"
-                      android:layout_marginBottom="10dp"
-                      app:cardCornerRadius="12dp"
-                      app:cardElevation="2dp"
-                      app:cardBackgroundColor="#FFFFFF">
-
-                      <LinearLayout
-                          android:layout_width="match_parent"
-                          android:layout_height="wrap_content"
-                          android:orientation="vertical"
-                          android:padding="8dp">
-
-                          <!-- Ряд 1 -->
-                          <LinearLayout
-                              android:layout_width="match_parent"
-                              android:layout_height="wrap_content"
-                              android:orientation="horizontal">
+                  <androidx.cardview.widget.CardView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="10dp" app:cardCornerRadius="12dp" app:cardElevation="2dp" app:cardBackgroundColor="#FFFFFF">
+                      <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="8dp">
+                          <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
                               <Button android:id="@+id/btnX" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="x" android:textAllCaps="false" style="?attr/materialButtonOutlinedStyle" />
                               <Button android:id="@+id/btnPower" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="^" style="?attr/materialButtonOutlinedStyle" />
                               <Button android:id="@+id/btnFraction" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="a/b" android:textAllCaps="false" style="?attr/materialButtonOutlinedStyle" />
@@ -600,12 +378,7 @@ jobs:
                               <Button android:id="@+id/btnCloseParen" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text=")" style="?attr/materialButtonOutlinedStyle" />
                               <Button android:id="@+id/btnBackspace" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="⌫" style="?attr/materialButtonOutlinedStyle" />
                           </LinearLayout>
-
-                          <!-- Ряд 2 -->
-                          <LinearLayout
-                              android:layout_width="match_parent"
-                              android:layout_height="wrap_content"
-                              android:orientation="horizontal">
+                          <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
                               <Button android:id="@+id/btnSin" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="sin" android:textAllCaps="false" style="?attr/materialButtonOutlinedStyle" />
                               <Button android:id="@+id/btnCos" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="cos" android:textAllCaps="false" style="?attr/materialButtonOutlinedStyle" />
                               <Button android:id="@+id/btnSqrt" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="√" style="?attr/materialButtonOutlinedStyle" />
@@ -613,34 +386,19 @@ jobs:
                               <Button android:id="@+id/btnMultiply" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="*" style="?attr/materialButtonOutlinedStyle" />
                               <Button android:id="@+id/btnClear" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="C" style="?attr/materialButtonOutlinedStyle" />
                           </LinearLayout>
-
-                          <!-- Ряд 3 -->
-                          <LinearLayout
-                              android:layout_width="match_parent"
-                              android:layout_height="wrap_content"
-                              android:orientation="horizontal">
+                          <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
                               <Button android:id="@+id/btn7" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="7" style="?attr/materialButtonOutlinedStyle" />
                               <Button android:id="@+id/btn8" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="8" style="?attr/materialButtonOutlinedStyle" />
                               <Button android:id="@+id/btn9" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="9" style="?attr/materialButtonOutlinedStyle" />
                               <Button android:id="@+id/btnMinus" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="-" style="?attr/materialButtonOutlinedStyle" />
                           </LinearLayout>
-
-                          <!-- Ряд 4 -->
-                          <LinearLayout
-                              android:layout_width="match_parent"
-                              android:layout_height="wrap_content"
-                              android:orientation="horizontal">
+                          <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
                               <Button android:id="@+id/btn4" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="4" style="?attr/materialButtonOutlinedStyle" />
                               <Button android:id="@+id/btn5" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="5" style="?attr/materialButtonOutlinedStyle" />
                               <Button android:id="@+id/btn6" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="6" style="?attr/materialButtonOutlinedStyle" />
                               <Button android:id="@+id/btnPlus" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="+" style="?attr/materialButtonOutlinedStyle" />
                           </LinearLayout>
-
-                          <!-- Ряд 5 -->
-                          <LinearLayout
-                              android:layout_width="match_parent"
-                              android:layout_height="wrap_content"
-                              android:orientation="horizontal">
+                          <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
                               <Button android:id="@+id/btn1" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="1" style="?attr/materialButtonOutlinedStyle" />
                               <Button android:id="@+id/btn2" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="2" style="?attr/materialButtonOutlinedStyle" />
                               <Button android:id="@+id/btn3" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="3" style="?attr/materialButtonOutlinedStyle" />
@@ -648,123 +406,44 @@ jobs:
                               <Button android:id="@+id/btnDot" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="." style="?attr/materialButtonOutlinedStyle" />
                           </LinearLayout>
 
-                          <Button
-                              android:id="@+id/btnCalc"
-                              android:layout_width="match_parent"
-                              android:layout_height="wrap_content"
-                              android:layout_marginTop="8dp"
-                              android:backgroundTint="#4F46E5"
-                              android:text="Рассчитать и построить"
-                              android:textAllCaps="false"
-                              android:textColor="#FFFFFF"
-                              android:textSize="15sp"
-                              android:textStyle="bold" />
+                          <Button android:id="@+id/btnCalc" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:backgroundTint="#4F46E5" android:text="Рассчитать и построить" android:textAllCaps="false" android:textColor="#FFFFFF" android:textSize="15sp" android:textStyle="bold" />
                       </LinearLayout>
                   </androidx.cardview.widget.CardView>
 
-                  <!-- Карточка графика -->
-                  <androidx.cardview.widget.CardView
-                      android:layout_width="match_parent"
-                      android:layout_height="wrap_content"
-                      android:layout_marginBottom="10dp"
-                      app:cardCornerRadius="12dp"
-                      app:cardElevation="2dp"
-                      app:cardBackgroundColor="#FFFFFF">
-
-                      <LinearLayout
-                          android:layout_width="match_parent"
-                          android:layout_height="wrap_content"
-                          android:orientation="vertical"
-                          android:padding="12dp">
-
-                          <TextView
-                              android:layout_width="wrap_content"
-                              android:layout_height="wrap_content"
-                              android:text="График функции"
-                              android:textColor="#64748B"
-                              android:textSize="12sp"
-                              android:textStyle="bold"
-                              android:layout_marginBottom="6dp" />
-
-                          <com.example.functioncalculator.GraphView
-                              android:id="@+id/graphView"
-                              android:layout_width="match_parent"
-                              android:layout_height="200dp" />
+                  <androidx.cardview.widget.CardView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="10dp" app:cardCornerRadius="12dp" app:cardElevation="2dp" app:cardBackgroundColor="#FFFFFF">
+                      <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="12dp">
+                          <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="График функции" android:textColor="#64748B" android:textSize="12sp" android:textStyle="bold" android:layout_marginBottom="6dp" />
+                          <com.example.functioncalculator.GraphView android:id="@+id/graphView" android:layout_width="match_parent" android:layout_height="200dp" />
                       </LinearLayout>
                   </androidx.cardview.widget.CardView>
 
-                  <!-- Таблица результатов -->
-                  <androidx.cardview.widget.CardView
-                      android:layout_width="match_parent"
-                      android:layout_height="wrap_content"
-                      app:cardCornerRadius="12dp"
-                      app:cardElevation="2dp"
-                      app:cardBackgroundColor="#FFFFFF">
-
-                      <LinearLayout
-                          android:layout_width="match_parent"
-                          android:layout_height="wrap_content"
-                          android:orientation="vertical"
-                          android:padding="12dp">
-
-                          <TextView
-                              android:layout_width="wrap_content"
-                              android:layout_height="wrap_content"
-                              android:text="Таблица значений"
-                              android:textColor="#64748B"
-                              android:textSize="12sp"
-                              android:textStyle="bold"
-                              android:layout_marginBottom="6dp" />
-
-                          <TextView
-                              android:id="@+id/textResult"
-                              android:layout_width="match_parent"
-                              android:layout_height="wrap_content"
-                              android:textColor="#334155"
-                              android:textSize="14sp"
-                              android:typeface="monospace" />
+                  <androidx.cardview.widget.CardView android:layout_width="match_parent" android:layout_height="wrap_content" app:cardCornerRadius="12dp" app:cardElevation="2dp" app:cardBackgroundColor="#FFFFFF">
+                      <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="12dp">
+                          <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Таблица значений" android:textColor="#64748B" android:textSize="12sp" android:textStyle="bold" android:layout_marginBottom="6dp" />
+                          <TextView android:id="@+id/textResult" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="#334155" android:textSize="14sp" android:typeface="monospace" />
                       </LinearLayout>
                   </androidx.cardview.widget.CardView>
-
               </LinearLayout>
           </ScrollView>
           EOF
 
-          # 7. Конфигурация Gradle и Manifest
+          # Gradle & Manifest
           cat << 'EOF' > settings.gradle
-          pluginManagement {
-              repositories {
-                  google()
-                  mavenCentral()
-                  gradlePluginPortal()
-              }
-          }
-          dependencyResolutionManagement {
-              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-          }
+          pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
+          dependencyResolutionManagement { repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS); repositories { google(); mavenCentral() } }
           rootProject.name = "Colku"
           include ':app'
           EOF
 
           cat << 'EOF' > build.gradle
-          plugins {
-              id 'com.android.application' version '8.2.1' apply false
-          }
+          plugins { id 'com.android.application' version '8.2.1' apply false }
           EOF
 
           cat << 'EOF' > app/build.gradle
-          plugins {
-              id 'com.android.application'
-          }
-
+          plugins { id 'com.android.application' }
           android {
               namespace 'com.example.functioncalculator'
               compileSdk 34
-
               defaultConfig {
                   applicationId "com.example.functioncalculator"
                   minSdk 24
@@ -772,13 +451,11 @@ jobs:
                   versionCode 1
                   versionName "1.0"
               }
-
               compileOptions {
                   sourceCompatibility JavaVersion.VERSION_17
                   targetCompatibility JavaVersion.VERSION_17
               }
           }
-
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
               implementation 'com.google.android.material:material:1.11.0'
@@ -789,14 +466,8 @@ jobs:
           cat << 'EOF' > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <application
-                  android:allowBackup="true"
-                  android:label="Colku"
-                  android:supportsRtl="true"
-                  android:theme="@style/Theme.MaterialComponents.DayNight.NoActionBar">
-                  <activity
-                      android:name="com.example.functioncalculator.MainActivity"
-                      android:exported="true">
+              <application android:allowBackup="true" android:label="Colku" android:supportsRtl="true" android:theme="@style/Theme.MaterialComponents.DayNight.NoActionBar">
+                  <activity android:name="com.example.functioncalculator.MainActivity" android:exported="true">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
                           <category android:name="android.intent.category.LAUNCHER" />
@@ -826,5 +497,314 @@ jobs:
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Colku-APK
+          name: Colku-Android-APK
           path: app/build/outputs/apk/debug/Colku.apk
+
+  # ==========================================
+  # 2. СБОРКА ДЛЯ WINDOWS (Colku.exe)
+  # ==========================================
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Build Windows Desktop App
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Force -Path desktop_src/com/colku
+
+          # Исходный код Java Swing приложения Colku для ПК
+          @'
+          package com.colku;
+
+          import javax.swing.*;
+          import java.awt.*;
+
+          class MathFunctionParser {
+              private final String str;
+              private final double xVal;
+              private int pos = -1, ch;
+
+              public MathFunctionParser(String str, double xVal) {
+                  this.str = str;
+                  this.xVal = xVal;
+              }
+
+              private void nextChar() { ch = (++pos < str.length()) ? str.charAt(pos) : -1; }
+
+              private boolean eat(int charToEat) {
+                  while (ch == ' ') nextChar();
+                  if (ch == charToEat) { nextChar(); return true; }
+                  return false;
+              }
+
+              public double parse() {
+                  nextChar();
+                  double x = parseExpression();
+                  if (pos < str.length()) throw new RuntimeException("Неизвестный символ: " + (char)ch);
+                  return x;
+              }
+
+              private double parseExpression() {
+                  double x = parseTerm();
+                  for (;;) {
+                      if      (eat('+')) x += parseTerm();
+                      else if (eat('-')) x -= parseTerm();
+                      else return x;
+                  }
+              }
+
+              private double parseTerm() {
+                  double x = parseFactor();
+                  for (;;) {
+                      if      (eat('*')) x *= parseFactor();
+                      else if (eat('/')) x /= parseFactor();
+                      else if (ch == '(' || (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z')) { x *= parseFactor(); }
+                      else return x;
+                  }
+              }
+
+              private double parseFactor() {
+                  if (eat('+')) return +parseFactor();
+                  if (eat('-')) return -parseFactor();
+                  double x;
+                  int startPos = this.pos;
+                  if (eat('(')) {
+                      x = parseExpression();
+                      eat(')');
+                  } else if ((ch >= '0' && ch <= '9') || ch == '.') {
+                      while ((ch >= '0' && ch <= '9') || ch == '.') nextChar();
+                      x = Double.parseDouble(str.substring(startPos, this.pos));
+                  } else if ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z')) {
+                      while ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z')) nextChar();
+                      String func = str.substring(startPos, this.pos);
+                      if (func.equalsIgnoreCase("x")) {
+                          x = xVal;
+                      } else {
+                          if (eat('(')) { x = parseExpression(); eat(')'); }
+                          else { x = parseFactor(); }
+                          switch (func.toLowerCase()) {
+                              case "sin": x = Math.sin(x); break;
+                              case "cos": x = Math.cos(x); break;
+                              case "tan": x = Math.tan(x); break;
+                              case "sqrt": x = Math.sqrt(x); break;
+                              case "abs": x = Math.abs(x); break;
+                              case "log": case "ln": x = Math.log(x); break;
+                              default: throw new RuntimeException("Неизвестная функция");
+                          }
+                      }
+                  } else {
+                      throw new RuntimeException("Ошибка");
+                  }
+                  if (eat('^')) x = Math.pow(x, parseFactor());
+                  return x;
+              }
+          }
+
+          class GraphPanel extends JPanel {
+              private String formula = "(1/4)x^3";
+              private double minX = -3, maxX = 3;
+
+              public void setFormulaAndRange(String formula, double minX, double maxX) {
+                  this.formula = formula;
+                  this.minX = minX;
+                  this.maxX = maxX;
+                  repaint();
+              }
+
+              @Override
+              protected void paintComponent(Graphics g) {
+                  super.paintComponent(g);
+                  Graphics2D g2 = (Graphics2D) g;
+                  g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+                  int w = getWidth(), h = getHeight();
+                  g2.setColor(Color.WHITE);
+                  g2.fillRect(0, 0, w, h);
+
+                  if (maxX <= minX) maxX = minX + 1;
+                  double minY = -10, maxY = 10;
+
+                  int zeroX = (int) (w * (-minX) / (maxX - minX));
+                  int zeroY = (int) (h * (maxY) / (maxY - minY));
+
+                  g2.setColor(new Color(226, 232, 240));
+                  for (int i = 0; i <= 10; i++) {
+                      int gx = (int) (w * i / 10.0);
+                      g2.drawLine(gx, 0, gx, h);
+                      g2.drawLine(0, (int) (h * i / 10.0), w, (int) (h * i / 10.0));
+                  }
+
+                  g2.setColor(new Color(51, 65, 85));
+                  g2.setStroke(new BasicStroke(2));
+                  g2.drawLine(0, zeroY, w, zeroY);
+                  g2.drawLine(zeroX, 0, zeroX, h);
+
+                  if (formula == null || formula.trim().isEmpty()) return;
+
+                  g2.setColor(new Color(79, 70, 229));
+                  g2.setStroke(new BasicStroke(3));
+
+                  Integer lastPx = null, lastPy = null;
+
+                  for (int px = 0; px < w; px += 2) {
+                      double x = minX + (double) px / w * (maxX - minX);
+                      try {
+                          MathFunctionParser parser = new MathFunctionParser(formula, x);
+                          double y = parser.parse();
+                          if (Double.isNaN(y) || Double.isInfinite(y)) { lastPx = null; continue; }
+
+                          int py = (int) (h * (maxY - y) / (maxY - minY));
+                          if (py < -h || py > 2 * h) { lastPx = null; continue; }
+
+                          if (lastPx != null) {
+                              g2.drawLine(lastPx, lastPy, px, py);
+                          }
+                          lastPx = px;
+                          lastPy = py;
+                      } catch (Exception e) {
+                          lastPx = null;
+                      }
+                  }
+              }
+          }
+
+          public class ColkuDesktop extends JFrame {
+              private JTextField txtFormula = new JTextField("(1/4)x^3", 15);
+              private JTextField txtStartX = new JTextField("-3", 5);
+              private JTextField txtEndX = new JTextField("3", 5);
+              private JTextField txtStep = new JTextField("0.5", 5);
+              private JTextArea txtResult = new JTextArea(10, 30);
+              private GraphPanel graphPanel = new GraphPanel();
+              private JTextField activeInput = txtFormula;
+
+              public ColkuDesktop() {
+                  setTitle("Colku - Графический калькулятор");
+                  setDefaultCloseOperation(EXIT_ON_CLOSE);
+                  setSize(800, 650);
+                  setLocationRelativeTo(null);
+
+                  JPanel mainPanel = new JPanel(new BorderLayout(10, 10));
+                  mainPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+
+                  JPanel topPanel = new JPanel(new FlowLayout());
+                  topPanel.add(new JLabel("f(x):"));
+                  topPanel.add(txtFormula);
+                  topPanel.add(new JLabel("Старт X:"));
+                  topPanel.add(txtStartX);
+                  topPanel.add(new JLabel("Конец X:"));
+                  topPanel.add(txtEndX);
+                  topPanel.add(new JLabel("Шаг:"));
+                  topPanel.add(txtStep);
+
+                  JButton btnCalc = new JButton("Рассчитать");
+                  btnCalc.setBackground(new Color(79, 70, 229));
+                  btnCalc.setForeground(Color.WHITE);
+                  btnCalc.addActionListener(e -> calculate());
+                  topPanel.add(btnCalc);
+
+                  txtFormula.addFocusListener(new java.awt.event.FocusAdapter() { public void focusGained(java.awt.event.FocusEvent e) { activeInput = txtFormula; } });
+                  txtStartX.addFocusListener(new java.awt.event.FocusAdapter() { public void focusGained(java.awt.event.FocusEvent e) { activeInput = txtStartX; } });
+                  txtEndX.addFocusListener(new java.awt.event.FocusAdapter() { public void focusGained(java.awt.event.FocusEvent e) { activeInput = txtEndX; } });
+                  txtStep.addFocusListener(new java.awt.event.FocusAdapter() { public void focusGained(java.awt.event.FocusEvent e) { activeInput = txtStep; } });
+
+                  JPanel keypadPanel = createKeypad();
+
+                  JPanel leftPanel = new JPanel(new BorderLayout(5, 5));
+                  leftPanel.add(topPanel, BorderLayout.NORTH);
+                  leftPanel.add(keypadPanel, BorderLayout.CENTER);
+
+                  txtResult.setFont(new Font("Monospaced", Font.PLAIN, 12));
+                  JScrollPane scrollResult = new JScrollPane(txtResult);
+
+                  JSplitPane splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, graphPanel, scrollResult);
+                  splitPane.setResizeWeight(0.6);
+
+                  mainPanel.add(leftPanel, BorderLayout.NORTH);
+                  mainPanel.add(splitPane, BorderLayout.CENTER);
+
+                  add(mainPanel);
+              }
+
+              private JPanel createKeypad() {
+                  JPanel p = new JPanel(new GridLayout(4, 6, 4, 4));
+                  String[] btns = {
+                      "x", "^", "a/b", "(", ")", "⌫",
+                      "sin", "cos", "√", "/", "*", "C",
+                      "7", "8", "9", "-", "4", "5",
+                      "6", "+", "1", "2", "3", "0"
+                  };
+
+                  for (String b : btns) {
+                      JButton btn = new JButton(b);
+                      btn.addActionListener(e -> {
+                          if (b.equals("a/b")) activeInput.replaceSelection("(/)");
+                          else if (b.equals("√")) activeInput.replaceSelection("sqrt(");
+                          else if (b.equals("sin") || b.equals("cos")) activeInput.replaceSelection(b + "(");
+                          else if (b.equals("⌫")) {
+                              String t = activeInput.getText();
+                              if (!t.isEmpty()) activeInput.setText(t.substring(0, t.length() - 1));
+                          } else if (b.equals("C")) activeInput.setText("");
+                          else activeInput.replaceSelection(b);
+                      });
+                      p.add(btn);
+                  }
+                  return p;
+              }
+
+              private void calculate() {
+                  String f = txtFormula.getText().trim();
+                  try {
+                      double startX = Double.parseDouble(txtStartX.getText().trim());
+                      double endX = Double.parseDouble(txtEndX.getText().trim());
+                      double step = Double.parseDouble(txtStep.getText().trim());
+
+                      graphPanel.setFormulaAndRange(f, startX, endX);
+
+                      StringBuilder sb = new StringBuilder();
+                      for (double x = startX; x <= endX + 1e-9; x += step) {
+                          try {
+                              MathFunctionParser p = new MathFunctionParser(f, x);
+                              sb.append(String.format("x = %6.2f   -->   f(x) = %8.4f\n", x, p.parse()));
+                          } catch (Exception ex) {
+                              sb.append(String.format("x = %6.2f   -->   Ошибка\n", x));
+                          }
+                      }
+                      txtResult.setText(sb.toString());
+                  } catch (Exception ex) {
+                      txtResult.setText("Ошибка ввода параметров");
+                  }
+              }
+
+              public static void main(String[] args) {
+                  SwingUtilities.invokeLater(() -> new ColkuDesktop().setVisible(true));
+              }
+          }
+          '@ | Out-File -Encoding utf8 desktop_src/com/colku/ColkuDesktop.java
+
+          # Компиляция и создание JAR
+          javac -d desktop_bin desktop_src/com/colku/*.java
+          
+          # Создание файла манифеста
+          "Main-Class: com.colku.ColkuDesktop`n" | Out-File -Encoding ascii Manifest.txt
+          jar cfm Colku.jar Manifest.txt -C desktop_bin .
+
+          # Упаковка в автономный EXE с помощью jpackage
+          jpackage --type app-image --name Colku --input . --main-jar Colku.jar --main-class com.colku.ColkuDesktop --dest output
+          
+          # Архивация папки приложения для готового скачивания
+          Compress-Archive -Path "output/Colku/*" -DestinationPath "Colku-Windows.zip"
+
+      - name: Upload Windows Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Colku-Windows-EXE
+          path: Colku-Windows.zip
