@@ -129,7 +129,7 @@ jobs:
           }
           EOF
 
-          # 4. Графическое отображение функций (GraphView.java)
+          # 4. Компонент отрисовки графика (GraphView.java)
           cat << 'EOF' > app/src/main/java/com/example/functioncalculator/GraphView.java
           package com.example.functioncalculator;
 
@@ -164,16 +164,17 @@ jobs:
 
               private void init() {
                   axisPaint = new Paint();
-                  axisPaint.setColor(Color.DKGRAY);
+                  axisPaint.setColor(Color.parseColor("#334155"));
                   axisPaint.setStrokeWidth(4f);
+                  axisPaint.setAntiAlias(true);
 
                   gridPaint = new Paint();
-                  gridPaint.setColor(Color.LTGRAY);
-                  gridPaint.setStrokeWidth(1f);
+                  gridPaint.setColor(Color.parseColor("#E2E8F0"));
+                  gridPaint.setStrokeWidth(2f);
 
                   linePaint = new Paint();
-                  linePaint.setColor(Color.RED);
-                  linePaint.setStrokeWidth(5f);
+                  linePaint.setColor(Color.parseColor("#4F46E5"));
+                  linePaint.setStrokeWidth(6f);
                   linePaint.setStyle(Paint.Style.STROKE);
                   linePaint.setAntiAlias(true);
               }
@@ -255,7 +256,7 @@ jobs:
           }
           EOF
 
-          # 5. MainActivity.java
+          # 5. MainActivity.java с поддержкой своей виртуальной клавиатуры
           cat << 'EOF' > app/src/main/java/com/example/functioncalculator/MainActivity.java
           package com.example.functioncalculator;
 
@@ -275,6 +276,8 @@ jobs:
               private TextView textResult;
               private GraphView graphView;
 
+              private EditText activeInput;
+
               @Override
               protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
@@ -288,12 +291,115 @@ jobs:
                   textResult = findViewById(R.id.textResult);
                   graphView = findViewById(R.id.graphView);
 
+                  // Отключаем системную клавиатуру для всех полей ввода
+                  disableSoftKeyboard(inputFormula);
+                  disableSoftKeyboard(inputStartX);
+                  disableSoftKeyboard(inputEndX);
+                  disableSoftKeyboard(inputStep);
+
+                  activeInput = inputFormula;
+
+                  View.OnFocusChangeListener focusListener = new View.OnFocusChangeListener() {
+                      @Override
+                      public void onFocusChange(View v, boolean hasFocus) {
+                          if (hasFocus && v instanceof EditText) {
+                              activeInput = (EditText) v;
+                          }
+                      }
+                  };
+
+                  inputFormula.setOnFocusChangeListener(focusListener);
+                  inputStartX.setOnFocusChangeListener(focusListener);
+                  inputEndX.setOnFocusChangeListener(focusListener);
+                  inputStep.setOnFocusChangeListener(focusListener);
+
+                  setupKeypad();
+
                   btnCalc.setOnClickListener(new View.OnClickListener() {
                       @Override
                       public void onClick(View v) {
                           calculate();
                       }
                   });
+              }
+
+              private void disableSoftKeyboard(EditText editText) {
+                  editText.setShowSoftInputOnFocus(false);
+              }
+
+              private void setupKeypad() {
+                  int[] keyIds = new int[] {
+                      R.id.btn0, R.id.btn1, R.id.btn2, R.id.btn3, R.id.btn4,
+                      R.id.btn5, R.id.btn6, R.id.btn7, R.id.btn8, R.id.btn9,
+                      R.id.btnDot, R.id.btnPlus, R.id.btnMinus, R.id.btnMultiply,
+                      R.id.btnDivide, R.id.btnPower, R.id.btnOpenParen, R.id.btnCloseParen,
+                      R.id.btnX, R.id.btnSin, R.id.btnCos, R.id.btnSqrt, R.id.btnFraction
+                  };
+
+                  View.OnClickListener keyListener = new View.OnClickListener() {
+                      @Override
+                      public void onClick(View v) {
+                          Button b = (Button) v;
+                          String text = b.getText().toString();
+                          if (text.equals("a/b")) {
+                              insertText("(/)");
+                          } else if (text.equals("√")) {
+                              insertText("sqrt(");
+                          } else if (text.equals("sin") || text.equals("cos")) {
+                              insertText(text + "(");
+                          } else {
+                              insertText(text);
+                          }
+                      }
+                  };
+
+                  for (int id : keyIds) {
+                      View v = findViewById(id);
+                      if (v != null) {
+                          v.setOnClickListener(keyListener);
+                      }
+                  }
+
+                  View btnBackspace = findViewById(R.id.btnBackspace);
+                  if (btnBackspace != null) {
+                      btnBackspace.setOnClickListener(new View.OnClickListener() {
+                          @Override
+                          public void onClick(View v) {
+                              deleteChar();
+                          }
+                      });
+                  }
+
+                  View btnClear = findViewById(R.id.btnClear);
+                  if (btnClear != null) {
+                      btnClear.setOnClickListener(new View.OnClickListener() {
+                          @Override
+                          public void onClick(View v) {
+                              if (activeInput != null) {
+                                  activeInput.setText("");
+                              }
+                          }
+                      });
+                  }
+              }
+
+              private void insertText(String text) {
+                  if (activeInput == null) return;
+                  int start = Math.max(activeInput.getSelectionStart(), 0);
+                  int end = Math.max(activeInput.getSelectionEnd(), 0);
+                  activeInput.getText().replace(Math.min(start, end), Math.max(start, end),
+                          text, 0, text.length());
+              }
+
+              private void deleteChar() {
+                  if (activeInput == null) return;
+                  int start = activeInput.getSelectionStart();
+                  int end = activeInput.getSelectionEnd();
+                  if (start != end) {
+                      activeInput.getText().delete(start, end);
+                  } else if (start > 0) {
+                      activeInput.getText().delete(start - 1, start);
+                  }
               }
 
               private void calculate() {
@@ -324,9 +430,9 @@ jobs:
                       try {
                           MathFunctionParser parser = new MathFunctionParser(formula, x);
                           double y = parser.parse();
-                          sb.append(String.format("x = %.2f   -->   f(x) = %.4f\n", x, y));
+                          sb.append(String.format("x = %6.2f   -->   f(x) = %8.4f\n", x, y));
                       } catch (Exception e) {
-                          sb.append(String.format("x = %.2f   -->   Ошибка\n", x));
+                          sb.append(String.format("x = %6.2f   -->   Ошибка\n", x));
                       }
                   }
                   textResult.setText(sb.toString());
@@ -342,118 +448,286 @@ jobs:
           }
           EOF
 
-          # 6. Разметка экрана с полями для диапазона и шага
+          # 6. Разметка экрана с кнопками клавиатуры (activity_main.xml)
           cat << 'EOF' > app/src/main/res/layout/activity_main.xml
           <?xml version="1.0" encoding="utf-8"?>
-          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+          <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+              xmlns:app="http://schemas.android.com/apk/res-auto"
               android:layout_width="match_parent"
               android:layout_height="match_parent"
-              android:orientation="vertical"
-              android:padding="16dp">
-
-              <TextView
-                  android:layout_width="wrap_content"
-                  android:layout_height="wrap_content"
-                  android:text="Формула f(x):"
-                  android:textSize="18sp"
-                  android:textStyle="bold" />
-
-              <EditText
-                  android:id="@+id/inputFormula"
-                  android:layout_width="match_parent"
-                  android:layout_height="wrap_content"
-                  android:hint="(1/4)x^3"
-                  android:text="(1/4)x^3" />
+              android:background="#F8FAFC"
+              android:fillViewport="true">
 
               <LinearLayout
                   android:layout_width="match_parent"
                   android:layout_height="wrap_content"
-                  android:orientation="horizontal"
-                  android:layout_marginTop="8dp">
-
-                  <LinearLayout
-                      android:layout_width="0dp"
-                      android:layout_height="wrap_content"
-                      android:layout_weight="1"
-                      android:orientation="vertical">
-                      <TextView
-                          android:layout_width="wrap_content"
-                          android:layout_height="wrap_content"
-                          android:text="Старт X"
-                          android:textSize="12sp" />
-                      <EditText
-                          android:id="@+id/inputStartX"
-                          android:layout_width="match_parent"
-                          android:layout_height="wrap_content"
-                          android:inputType="numberSigned|numberDecimal"
-                          android:text="-3" />
-                  </LinearLayout>
-
-                  <LinearLayout
-                      android:layout_width="0dp"
-                      android:layout_height="wrap_content"
-                      android:layout_weight="1"
-                      android:orientation="vertical"
-                      android:layout_marginStart="8dp">
-                      <TextView
-                          android:layout_width="wrap_content"
-                          android:layout_height="wrap_content"
-                          android:text="Конец X"
-                          android:textSize="12sp" />
-                      <EditText
-                          android:id="@+id/inputEndX"
-                          android:layout_width="match_parent"
-                          android:layout_height="wrap_content"
-                          android:inputType="numberSigned|numberDecimal"
-                          android:text="3" />
-                  </LinearLayout>
-
-                  <LinearLayout
-                      android:layout_width="0dp"
-                      android:layout_height="wrap_content"
-                      android:layout_weight="1"
-                      android:orientation="vertical"
-                      android:layout_marginStart="8dp">
-                      <TextView
-                          android:layout_width="wrap_content"
-                          android:layout_height="wrap_content"
-                          android:text="Шаг"
-                          android:textSize="12sp" />
-                      <EditText
-                          android:id="@+id/inputStep"
-                          android:layout_width="match_parent"
-                          android:layout_height="wrap_content"
-                          android:inputType="numberDecimal"
-                          android:text="0.5" />
-                  </LinearLayout>
-              </LinearLayout>
-
-              <Button
-                  android:id="@+id/btnCalc"
-                  android:layout_width="match_parent"
-                  android:layout_height="wrap_content"
-                  android:layout_marginTop="8dp"
-                  android:text="Построить график и рассчитать" />
-
-              <com.example.functioncalculator.GraphView
-                  android:id="@+id/graphView"
-                  android:layout_width="match_parent"
-                  android:layout_height="220dp"
-                  android:layout_marginTop="12dp" />
-
-              <ScrollView
-                  android:layout_width="match_parent"
-                  android:layout_height="match_parent"
-                  android:layout_marginTop="12dp">
+                  android:orientation="vertical"
+                  android:padding="12dp">
 
                   <TextView
-                      android:id="@+id/textResult"
+                      android:layout_width="wrap_content"
+                      android:layout_height="wrap_content"
+                      android:text="Colku"
+                      android:textColor="#1E293B"
+                      android:textSize="24sp"
+                      android:textStyle="bold"
+                      android:layout_marginBottom="8dp" />
+
+                  <!-- Поля ввода -->
+                  <androidx.cardview.widget.CardView
                       android:layout_width="match_parent"
                       android:layout_height="wrap_content"
-                      android:textSize="15sp"
-                      android:typeface="monospace" />
-              </ScrollView>
-          </LinearLayout>
+                      android:layout_marginBottom="10dp"
+                      app:cardCornerRadius="12dp"
+                      app:cardElevation="2dp"
+                      app:cardBackgroundColor="#FFFFFF">
+
+                      <LinearLayout
+                          android:layout_width="match_parent"
+                          android:layout_height="wrap_content"
+                          android:orientation="vertical"
+                          android:padding="12dp">
+
+                          <TextView
+                              android:layout_width="wrap_content"
+                              android:layout_height="wrap_content"
+                              android:text="Формула f(x)"
+                              android:textColor="#64748B"
+                              android:textSize="12sp"
+                              android:textStyle="bold" />
+
+                          <EditText
+                              android:id="@+id/inputFormula"
+                              android:layout_width="match_parent"
+                              android:layout_height="wrap_content"
+                              android:hint="(1/4)x^3"
+                              android:text="(1/4)x^3"
+                              android:textColor="#0F172A"
+                              android:textSize="16sp" />
+
+                          <LinearLayout
+                              android:layout_width="match_parent"
+                              android:layout_height="wrap_content"
+                              android:orientation="horizontal"
+                              android:layout_marginTop="8dp">
+
+                              <LinearLayout
+                                  android:layout_width="0dp"
+                                  android:layout_height="wrap_content"
+                                  android:layout_weight="1"
+                                  android:orientation="vertical">
+                                  <TextView
+                                      android:layout_width="wrap_content"
+                                      android:layout_height="wrap_content"
+                                      android:text="Старт X"
+                                      android:textColor="#64748B"
+                                      android:textSize="11sp" />
+                                  <EditText
+                                      android:id="@+id/inputStartX"
+                                      android:layout_width="match_parent"
+                                      android:layout_height="wrap_content"
+                                      android:text="-3"
+                                      android:textColor="#0F172A" />
+                              </LinearLayout>
+
+                              <LinearLayout
+                                  android:layout_width="0dp"
+                                  android:layout_height="wrap_content"
+                                  android:layout_weight="1"
+                                  android:orientation="vertical"
+                                  android:layout_marginStart="6dp">
+                                  <TextView
+                                      android:layout_width="wrap_content"
+                                      android:layout_height="wrap_content"
+                                      android:text="Конец X"
+                                      android:textColor="#64748B"
+                                      android:textSize="11sp" />
+                                  <EditText
+                                      android:id="@+id/inputEndX"
+                                      android:layout_width="match_parent"
+                                      android:layout_height="wrap_content"
+                                      android:text="3"
+                                      android:textColor="#0F172A" />
+                              </LinearLayout>
+
+                              <LinearLayout
+                                  android:layout_width="0dp"
+                                  android:layout_height="wrap_content"
+                                  android:layout_weight="1"
+                                  android:orientation="vertical"
+                                  android:layout_marginStart="6dp">
+                                  <TextView
+                                      android:layout_width="wrap_content"
+                                      android:layout_height="wrap_content"
+                                      android:text="Шаг"
+                                      android:textColor="#64748B"
+                                      android:textSize="11sp" />
+                                  <EditText
+                                      android:id="@+id/inputStep"
+                                      android:layout_width="match_parent"
+                                      android:layout_height="wrap_content"
+                                      android:text="0.5"
+                                      android:textColor="#0F172A" />
+                              </LinearLayout>
+                          </LinearLayout>
+                      </LinearLayout>
+                  </androidx.cardview.widget.CardView>
+
+                  <!-- Встроенная клавиатура -->
+                  <androidx.cardview.widget.CardView
+                      android:layout_width="match_parent"
+                      android:layout_height="wrap_content"
+                      android:layout_marginBottom="10dp"
+                      app:cardCornerRadius="12dp"
+                      app:cardElevation="2dp"
+                      app:cardBackgroundColor="#FFFFFF">
+
+                      <LinearLayout
+                          android:layout_width="match_parent"
+                          android:layout_height="wrap_content"
+                          android:orientation="vertical"
+                          android:padding="8dp">
+
+                          <!-- Ряд 1 -->
+                          <LinearLayout
+                              android:layout_width="match_parent"
+                              android:layout_height="wrap_content"
+                              android:orientation="horizontal">
+                              <Button android:id="@+id/btnX" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="x" android:textAllCaps="false" style="?attr/materialButtonOutlinedStyle" />
+                              <Button android:id="@+id/btnPower" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="^" style="?attr/materialButtonOutlinedStyle" />
+                              <Button android:id="@+id/btnFraction" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="a/b" android:textAllCaps="false" style="?attr/materialButtonOutlinedStyle" />
+                              <Button android:id="@+id/btnOpenParen" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="(" style="?attr/materialButtonOutlinedStyle" />
+                              <Button android:id="@+id/btnCloseParen" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text=")" style="?attr/materialButtonOutlinedStyle" />
+                              <Button android:id="@+id/btnBackspace" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="⌫" style="?attr/materialButtonOutlinedStyle" />
+                          </LinearLayout>
+
+                          <!-- Ряд 2 -->
+                          <LinearLayout
+                              android:layout_width="match_parent"
+                              android:layout_height="wrap_content"
+                              android:orientation="horizontal">
+                              <Button android:id="@+id/btnSin" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="sin" android:textAllCaps="false" style="?attr/materialButtonOutlinedStyle" />
+                              <Button android:id="@+id/btnCos" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="cos" android:textAllCaps="false" style="?attr/materialButtonOutlinedStyle" />
+                              <Button android:id="@+id/btnSqrt" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="√" style="?attr/materialButtonOutlinedStyle" />
+                              <Button android:id="@+id/btnDivide" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="/" style="?attr/materialButtonOutlinedStyle" />
+                              <Button android:id="@+id/btnMultiply" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="*" style="?attr/materialButtonOutlinedStyle" />
+                              <Button android:id="@+id/btnClear" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="C" style="?attr/materialButtonOutlinedStyle" />
+                          </LinearLayout>
+
+                          <!-- Ряд 3 -->
+                          <LinearLayout
+                              android:layout_width="match_parent"
+                              android:layout_height="wrap_content"
+                              android:orientation="horizontal">
+                              <Button android:id="@+id/btn7" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="7" style="?attr/materialButtonOutlinedStyle" />
+                              <Button android:id="@+id/btn8" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="8" style="?attr/materialButtonOutlinedStyle" />
+                              <Button android:id="@+id/btn9" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="9" style="?attr/materialButtonOutlinedStyle" />
+                              <Button android:id="@+id/btnMinus" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="-" style="?attr/materialButtonOutlinedStyle" />
+                          </LinearLayout>
+
+                          <!-- Ряд 4 -->
+                          <LinearLayout
+                              android:layout_width="match_parent"
+                              android:layout_height="wrap_content"
+                              android:orientation="horizontal">
+                              <Button android:id="@+id/btn4" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="4" style="?attr/materialButtonOutlinedStyle" />
+                              <Button android:id="@+id/btn5" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="5" style="?attr/materialButtonOutlinedStyle" />
+                              <Button android:id="@+id/btn6" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="6" style="?attr/materialButtonOutlinedStyle" />
+                              <Button android:id="@+id/btnPlus" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="+" style="?attr/materialButtonOutlinedStyle" />
+                          </LinearLayout>
+
+                          <!-- Ряд 5 -->
+                          <LinearLayout
+                              android:layout_width="match_parent"
+                              android:layout_height="wrap_content"
+                              android:orientation="horizontal">
+                              <Button android:id="@+id/btn1" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="1" style="?attr/materialButtonOutlinedStyle" />
+                              <Button android:id="@+id/btn2" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="2" style="?attr/materialButtonOutlinedStyle" />
+                              <Button android:id="@+id/btn3" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="3" style="?attr/materialButtonOutlinedStyle" />
+                              <Button android:id="@+id/btn0" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="0" style="?attr/materialButtonOutlinedStyle" />
+                              <Button android:id="@+id/btnDot" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="." style="?attr/materialButtonOutlinedStyle" />
+                          </LinearLayout>
+
+                          <Button
+                              android:id="@+id/btnCalc"
+                              android:layout_width="match_parent"
+                              android:layout_height="wrap_content"
+                              android:layout_marginTop="8dp"
+                              android:backgroundTint="#4F46E5"
+                              android:text="Рассчитать и построить"
+                              android:textAllCaps="false"
+                              android:textColor="#FFFFFF"
+                              android:textSize="15sp"
+                              android:textStyle="bold" />
+                      </LinearLayout>
+                  </androidx.cardview.widget.CardView>
+
+                  <!-- Карточка графика -->
+                  <androidx.cardview.widget.CardView
+                      android:layout_width="match_parent"
+                      android:layout_height="wrap_content"
+                      android:layout_marginBottom="10dp"
+                      app:cardCornerRadius="12dp"
+                      app:cardElevation="2dp"
+                      app:cardBackgroundColor="#FFFFFF">
+
+                      <LinearLayout
+                          android:layout_width="match_parent"
+                          android:layout_height="wrap_content"
+                          android:orientation="vertical"
+                          android:padding="12dp">
+
+                          <TextView
+                              android:layout_width="wrap_content"
+                              android:layout_height="wrap_content"
+                              android:text="График функции"
+                              android:textColor="#64748B"
+                              android:textSize="12sp"
+                              android:textStyle="bold"
+                              android:layout_marginBottom="6dp" />
+
+                          <com.example.functioncalculator.GraphView
+                              android:id="@+id/graphView"
+                              android:layout_width="match_parent"
+                              android:layout_height="200dp" />
+                      </LinearLayout>
+                  </androidx.cardview.widget.CardView>
+
+                  <!-- Таблица результатов -->
+                  <androidx.cardview.widget.CardView
+                      android:layout_width="match_parent"
+                      android:layout_height="wrap_content"
+                      app:cardCornerRadius="12dp"
+                      app:cardElevation="2dp"
+                      app:cardBackgroundColor="#FFFFFF">
+
+                      <LinearLayout
+                          android:layout_width="match_parent"
+                          android:layout_height="wrap_content"
+                          android:orientation="vertical"
+                          android:padding="12dp">
+
+                          <TextView
+                              android:layout_width="wrap_content"
+                              android:layout_height="wrap_content"
+                              android:text="Таблица значений"
+                              android:textColor="#64748B"
+                              android:textSize="12sp"
+                              android:textStyle="bold"
+                              android:layout_marginBottom="6dp" />
+
+                          <TextView
+                              android:id="@+id/textResult"
+                              android:layout_width="match_parent"
+                              android:layout_height="wrap_content"
+                              android:textColor="#334155"
+                              android:textSize="14sp"
+                              android:typeface="monospace" />
+                      </LinearLayout>
+                  </androidx.cardview.widget.CardView>
+
+              </LinearLayout>
+          </ScrollView>
           EOF
 
           # 7. Конфигурация Gradle и Manifest
@@ -472,7 +746,7 @@ jobs:
                   mavenCentral()
               }
           }
-          rootProject.name = "MyCalculator"
+          rootProject.name = "Colku"
           include ':app'
           EOF
 
@@ -508,6 +782,7 @@ jobs:
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
               implementation 'com.google.android.material:material:1.11.0'
+              implementation 'androidx.cardview:cardview:1.0.0'
           }
           EOF
 
@@ -516,9 +791,9 @@ jobs:
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <application
                   android:allowBackup="true"
-                  android:label="Калькулятор"
+                  android:label="Colku"
                   android:supportsRtl="true"
-                  android:theme="@style/Theme.AppCompat.Light.NoActionBar">
+                  android:theme="@style/Theme.MaterialComponents.DayNight.NoActionBar">
                   <activity
                       android:name="com.example.functioncalculator.MainActivity"
                       android:exported="true">
@@ -544,10 +819,12 @@ jobs:
           gradle-version: '8.4'
 
       - name: Build APK
-        run: gradle assembleDebug
+        run: |
+          gradle assembleDebug
+          mv app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/Colku.apk
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: Colku-APK
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: app/build/outputs/apk/debug/Colku.apk
