@@ -28,11 +28,108 @@ jobs:
           mkdir -p app/src/main/java/com/example/functioncalculator
           mkdir -p app/src/main/res/layout
 
-          # 3. Копируем MathFunctionParser.java из репозитория и обновляем package
-          find . -iname "MathFunctionParser.java" -exec cp {} app/src/main/java/com/example/functioncalculator/ \;
-          sed -i '1s/^package.*/package com.example.functioncalculator;/' app/src/main/java/com/example/functioncalculator/MathFunctionParser.java || true
+          # 3. Создаем парсер математических выражений (MathFunctionParser.java)
+          cat << 'EOF' > app/src/main/java/com/example/functioncalculator/MathFunctionParser.java
+          package com.example.functioncalculator;
 
-          # 4. Создаем MainActivity.java для работы экрана на телефоне
+          public class MathFunctionParser {
+              private final String str;
+              private final double xVal;
+              private int pos = -1;
+              private int ch;
+
+              public MathFunctionParser(String str, double xVal) {
+                  this.str = str;
+                  this.xVal = xVal;
+              }
+
+              private void nextChar() {
+                  ch = (++pos < str.length()) ? str.charAt(pos) : -1;
+              }
+
+              private boolean eat(int charToEat) {
+                  while (ch == ' ') nextChar();
+                  if (ch == charToEat) {
+                      nextChar();
+                      return true;
+                  }
+                  return false;
+              }
+
+              public double parse() {
+                  nextChar();
+                  double x = parseExpression();
+                  if (pos < str.length()) throw new RuntimeException("Неизвестный символ: " + (char)ch);
+                  return x;
+              }
+
+              private double parseExpression() {
+                  double x = parseTerm();
+                  for (;;) {
+                      if      (eat('+')) x += parseTerm();
+                      else if (eat('-')) x -= parseTerm();
+                      else return x;
+                  }
+              }
+
+              private double parseTerm() {
+                  double x = parseFactor();
+                  for (;;) {
+                      if      (eat('*')) x *= parseFactor();
+                      else if (eat('/')) x /= parseFactor();
+                      else if (ch == '(' || (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z')) {
+                          x *= parseFactor();
+                      }
+                      else return x;
+                  }
+              }
+
+              private double parseFactor() {
+                  if (eat('+')) return +parseFactor();
+                  if (eat('-')) return -parseFactor();
+
+                  double x;
+                  int startPos = this.pos;
+                  if (eat('(')) {
+                      x = parseExpression();
+                      eat(')');
+                  } else if ((ch >= '0' && ch <= '9') || ch == '.') {
+                      while ((ch >= '0' && ch <= '9') || ch == '.') nextChar();
+                      x = Double.parseDouble(str.substring(startPos, this.pos));
+                  } else if ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z')) {
+                      while ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z')) nextChar();
+                      String func = str.substring(startPos, this.pos);
+                      if (func.equalsIgnoreCase("x")) {
+                          x = xVal;
+                      } else {
+                          if (eat('(')) {
+                              x = parseExpression();
+                              eat(')');
+                          } else {
+                              x = parseFactor();
+                          }
+                          switch (func.toLowerCase()) {
+                              case "sin": x = Math.sin(x); break;
+                              case "cos": x = Math.cos(x); break;
+                              case "tan": x = Math.tan(x); break;
+                              case "sqrt": x = Math.sqrt(x); break;
+                              case "abs": x = Math.abs(x); break;
+                              case "log": case "ln": x = Math.log(x); break;
+                              default: throw new RuntimeException("Неизвестная функция: " + func);
+                          }
+                      }
+                  } else {
+                      throw new RuntimeException("Ошибка в формуле");
+                  }
+
+                  if (eat('^')) x = Math.pow(x, parseFactor());
+
+                  return x;
+              }
+          }
+          EOF
+
+          # 4. Создаем MainActivity.java
           cat << 'EOF' > app/src/main/java/com/example/functioncalculator/MainActivity.java
           package com.example.functioncalculator;
 
