@@ -549,5 +549,5 @@ jobs:
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Calculator-APK
+          name: Colku-APK
           path: app/build/outputs/apk/debug/app-debug.apk
