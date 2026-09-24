@@ -19,18 +19,21 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Build Android APK
+      - name: Setup Android Project Structure
         run: |
-          # 1. Создаем структуру каталогов
+          # 1. Принимаем лицензии Android SDK
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
+
+          # 2. Создаем структуру каталогов
           mkdir -p app/src/main/java/com/example/functioncalculator
           mkdir -p app/src/main/res/layout
 
-          # 2. Находим и раскладываем исходные файлы
-          find . -name "MainActivity.java" -exec cp {} app/src/main/java/com/example/functioncalculator/ \;
-          find . -name "MathFunctionParser.java" -exec cp {} app/src/main/java/com/example/functioncalculator/ \;
-          find . -name "activity_main.xml" -exec cp {} app/src/main/res/layout/ \;
+          # 3. Находим и раскладываем исходные файлы (без учета регистра)
+          find . -iname "MainActivity.java" -exec cp {} app/src/main/java/com/example/functioncalculator/ \;
+          find . -iname "MathFunctionParser.java" -exec cp {} app/src/main/java/com/example/functioncalculator/ \;
+          find . -iname "activity_main.xml" -exec cp {} app/src/main/res/layout/ \;
 
-          # 3. Создаем settings.gradle
+          # 4. Создаем settings.gradle
           cat << 'EOF' > settings.gradle
           pluginManagement {
               repositories {
@@ -50,28 +53,18 @@ jobs:
           include ':app'
           EOF
 
-          # 4. Создаем корневой build.gradle
+          # 5. Создаем корневой build.gradle
           cat << 'EOF' > build.gradle
-          buildscript {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-              dependencies {
-                  classpath 'com.android.tools.build:gradle:8.1.1'
-              }
-          }
-          allprojects {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
+          plugins {
+              id 'com.android.application' version '8.1.1' apply false
           }
           EOF
 
-          # 5. Создаем app/build.gradle
+          # 6. Создаем app/build.gradle
           cat << 'EOF' > app/build.gradle
-          apply plugin: 'com.android.application'
+          plugins {
+              id 'com.android.application'
+          }
 
           android {
               namespace 'com.example.functioncalculator'
@@ -97,7 +90,7 @@ jobs:
           }
           EOF
 
-          # 6. Создаем AndroidManifest.xml
+          # 7. Создаем AndroidManifest.xml
           cat << 'EOF' > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -118,9 +111,13 @@ jobs:
           </manifest>
           EOF
 
-          # 7. Используем предустановленный Android SDK и запускаем сборку
           echo "sdk.dir=$ANDROID_HOME" > local.properties
-          gradle assembleDebug
+
+      - name: Setup Gradle Environment
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Build APK
+        run: gradle assembleDebug
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
