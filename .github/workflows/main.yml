@@ -111,6 +111,12 @@ jobs:
           </manifest>
           EOF
 
+          # 8. Включаем поддержку AndroidX
+          cat << 'EOF' > gradle.properties
+          android.useAndroidX=true
+          android.enableJetifier=true
+          EOF
+
           echo "sdk.dir=$ANDROID_HOME" > local.properties
 
       - name: Setup Gradle 8.4
